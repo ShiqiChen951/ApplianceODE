@@ -1,0 +1,105 @@
+DiffSenNet: Learning Global Sensitivity Fields for Mechanistic Discovery and Control in Complex Dynamical Systems
+Abstract
+Understanding and controlling complex dynamical systems remains a fundamental challenge across science and engineering. While recent advances in deep learning have significantly improved predictive capabilities, most existing approaches focus on state forecasting and offer limited insight into the underlying mechanisms governing system behavior. In this work, we introduce DiffSenNet, a novel operator learning framework that shifts the modeling paradigm from state evolution to learning global sensitivity fields.
+Instead of directly mapping states to future states, DiffSenNet learns a differentiable representation of how system states respond to variations in intrinsic parameters across both space and time. This formulation enables the model to capture the causal structure underlying dynamical evolution. As a result, the proposed framework not only achieves competitive predictive accuracy but also exhibits strong robustness under parameter extrapolation, rapid adaptation to unseen systems with minimal data, and the ability to identify key parameters and critical temporal windows that govern qualitative system transitions.
+We validate DiffSenNet across a diverse set of benchmarks, including chaotic systems, fluid dynamics, heat transfer, and hemodynamic simulations. Experimental results demonstrate that the learned sensitivity fields serve as both predictive operators and interpretable tools for scientific discovery. This work establishes a unified pathway from black-box prediction to mechanism-aware modeling, opening new directions for interpretable and controllable scientific machine learning.
+
+1.Introduction
+Understanding the behavior of complex dynamical systems is a central problem in many scientific and engineering domains, including fluid mechanics, climate modeling, biological systems, and material science. These systems are typically governed by nonlinear interactions across space and time, making both prediction and control highly challenging tasks.
+In recent years, deep learning–based operator learning methods have shown remarkable success in approximating solution operators of partial differential equations and dynamical systems. Models such as Fourier Neural Operators and DeepONets are capable of learning mappings between function spaces and have significantly improved the efficiency of surrogate modeling. However, despite their predictive power, these approaches largely operate as black-box models. They focus on reproducing trajectories without explicitly modeling the underlying mechanisms that govern system evolution.
+This limitation raises several fundamental challenges. First, the lack of interpretability prevents these models from providing insights into which parameters drive system behavior. Second, their generalization ability is often limited, especially when applied to parameter regimes outside the training distribution. Third, adapting these models to new systems typically requires large amounts of data and retraining, which is impractical in many scientific settings.
+To address these challenges, we propose a new paradigm centered on learning global sensitivity fields. Instead of learning direct mappings from inputs to outputs, we model how system states change with respect to variations in intrinsic parameters. This sensitivity-based formulation captures the differential structure of the system, enabling a deeper understanding of the relationship between parameters and dynamics.
+To address these challenges, we propose a new paradigm centered on learning global sensitivity fields. Instead of learning direct mappings from inputs to outputs, we model how system states change with respect to variations in intrinsic parameters. This sensitivity-based formulation captures the differential structure of the system, enabling a deeper understanding of the relationship between parameters and dynamics.
+Through extensive experiments across multiple physical systems, we show that learning global sensitivity fields transforms predictive models into interpretable scientific tools. This work bridges the gap between data-driven modeling and mechanistic understanding, providing a unified framework for prediction, generalization, and discovery in complex dynamical systems.
+
+2.Results
+2.1Framework Overview
+The proposed DiffSenNet framework is built upon a fundamental shift in representation: instead of modeling state evolution directly, we learn a global sensitivity field that characterizes how system states respond to parameter variations across space and time.
+Formally, the sensitivity field defines a differentiable mapping between system parameters and state variables, capturing the local and global influence of parameters throughout the dynamical process. This field serves as the central representation of the model, encoding both predictive and mechanistic information.
+The learning process is implemented using neural networks that approximate the derivatives of system states with respect to parameters. Once the sensitivity field is learned, system trajectories can be reconstructed through numerical integration, enabling forward prediction while maintaining access to parameter influence at every point in space and time.
+This design differs fundamentally from conventional approaches. Traditional operator learning methods treat sensitivity as a post hoc analysis, often requiring additional computational steps and providing only local insights. In contrast, DiffSenNet integrates sensitivity directly into the learning process, resulting in a unified framework that supports prediction, extrapolation, adaptation, and discovery.
+2.2In-Distribution Dynamic Prediction
+We first evaluate the predictive performance of DiffSenNet under in-distribution settings, where test parameters are sampled from the same range as the training data. This evaluation establishes whether the proposed sensitivity-based framework can match the accuracy of state-of-the-art operator learning methods.
+
+Figure 2. Benchmark datasets used for evaluating DiffSenNet. Examples include irregular meshes, geometric deformation systems, heat transfer domains, and vascular flow structures. 
+Input fields and corresponding output fields are shown to illustrate the diversity of physical systems considered.
+Across a variety of benchmark systems—including chaotic attractors, fluid flow, heat transfer, and cardiovascular simulations—the model achieves high-fidelity predictions. The generated trajectories closely match ground truth solutions obtained from numerical simulations, capturing both short-term dynamics and long-term structural behavior.
+Quantitative results show that DiffSenNet achieves comparable or lower errors than baseline methods such as FNO and DeepONet. Importantly, this demonstrates that incorporating sensitivity learning does not compromise predictive performance. Instead, it provides a stronger foundation for more advanced capabilities such as extrapolation and mechanistic analysis.
+
+Fig. 3 Quantitative comparison of prediction accuracy under in-distribution conditions. Error curves across multiple benchmark systems demonstrate that DiffSenNet achieves consistently lower prediction errors compared with baseline operator learning methods.a, The overall architecture, input and output of CelloType. First, a Transformer-based feature extractor is employed to derive multiscale features (Cb) from the image. Second, using a Transformer-based architecture, the DINO object detection module extracts latent features (Ce) and query embeddings (qc) that are combined to generate object detection boxes with cell type labels. Subsequently
+
+Table 1. Relative error comparison under in-distribution settings across multiple dynamical systems. DiffSenNet consistently achieves lower prediction errors than baseline operator learning methods.
+
+Table 2:Relative error comparison of operator learning on irregular domains.
+2.3 Robust Extrapolation Beyond Training Parameters
+A key requirement for scientific machine learning models is the ability to generalize beyond training conditions. To evaluate this capability, we test DiffSenNet under multiple out-of-distribution parameter settings.
+
+Fig. 4: Visualization of extrapolation performance beyond the training parameter range. Predicted fields generated by DiffSenNet closely match reference solutions under out-of-distribution conditions, demonstrating strong robustness and stability across diverse dynamical systems.a, The overall architecture, input and output of CelloType. First, a Transformer-based feature extractor is employed to derive multiscale features (Cb) from the image. Second, using a Transformer-based architecture, the DINO object detection module extracts latent features (Ce) and query embeddings (qc) that are combined to generate object detection boxes with cell type labels. Subsequently
+The model is trained on a bounded parameter range and evaluated on several extrapolation regimes with increasing deviation from the training distribution.
+
+Table 3:Relative l2 error comparison of operator learning on irregular domains(Test loss extrap).
+
+Table 4:Relative l2 error comparison of operator learning on irregular domains(Test loss extrap p1).
+
+Table 5:Relative l2 error comparison of operator learning on irregular domains(Test loss extrap p2).
+
+Table 6:Relative l2 error comparison of operator learning on irregular domains(Test loss extrap p3).
+
+Table 7:Relative l2 error comparison of operator learning on irregular domains(Test loss extrap p4).
+
+Table 8:Relative l2 error comparison of operator learning on irregular domains(Test loss extrap p5).
+Across all tested systems, DiffSenNet maintains stable performance with relatively low error growth across progressively larger parameter deviations. As summarized in Tables 3–8, the proposed framework consistently achieves lower relative L2 errors compared with conventional operator learning models across multiple extrapolation scenarios.
+This robustness originates from the explicit modeling of parameter sensitivities embedded within the DiffSenNet architecture. By directly learning how system states respond to parameter variations, the model captures intrinsic physical dependencies rather than relying solely on empirical correlations. Consequently, predictions remain stable even when extrapolating far beyond the training distribution.
+Visual inspection of the predicted fields further confirms the reliability of the extrapolated solutions. In all evaluated domains—including irregular Darcy flow, turbulent pipe flow, thermal conduction, composite deformation, and vascular flow simulations—the predicted spatial patterns remain physically consistent and free from artificial artifacts.
+In contrast, baseline methods exhibit significant performance degradation under large parameter shifts, often producing unstable or physically inconsistent predictions. These observations highlight the advantage of sensitivity-based operator learning in achieving robust generalization across diverse dynamical regimes.
+This robustness stems from the explicit modeling of parameter sensitivity. By learning how system states change with respect to parameters, the model captures underlying physical relationships rather than surface-level correlations. As a result, predictions remain consistent even when extrapolating to unseen regimes.
+In contrast, baseline methods exhibit significant performance degradation under large parameter shifts. This highlights the advantage of sensitivity-based representations in achieving reliable generalization.
+2.4 Few-Shot Adaptation to Unseen Systems
+To evaluate adaptability, we consider scenarios where the model is applied to previously unseen systems with only a small number of available samples.
+DiffSenNet enables efficient few-shot adaptation by leveraging the learned sensitivity field as a transferable representation. Instead of retraining the entire model, only minimal adjustments are required to align the sensitivity field with the new system.
+Experimental results show that the model quickly achieves near-optimal performance with limited data. This capability significantly reduces the cost of deploying the model in real-world scenarios, where collecting large datasets is often infeasible.
+2.5 Discovering Control Parameters and Critical Windows
+One of the most important advantages of DiffSenNet is its ability to provide mechanistic insights. The learned sensitivity field serves as a continuous map that reveals how system behavior depends on parameters.
+By analyzing sensitivity magnitudes, we identify key parameters that strongly influence system dynamics. Additionally, temporal analysis reveals critical windows during which the system is most responsive to parameter changes.
+These findings enable the identification of causal mechanisms underlying system behavior. In chaotic systems, for example, sensitivity peaks correspond to transitions between different dynamic regimes. This demonstrates that the model can uncover hidden structures that are not directly observable from trajectory data alone.
+2.6 Sensitivity-Guided Control and Design
+Building on the discovered sensitivity structure, we further demonstrate that DiffSenNet can be used for control and design tasks.
+By applying targeted perturbations to high-sensitivity parameters during critical time windows, we can effectively steer system behavior toward desired outcomes. Compared to naive intervention strategies, sensitivity-guided control achieves higher efficiency and stability.
+This capability is validated across multiple domains, including fluid dynamics and thermal systems. The results show that DiffSenNet is not only a predictive model but also a practical tool for decision-making and optimization.
+3. Discussion
+The proposed DiffSenNet framework demonstrates that learning global sensitivity fields provides a powerful alternative to traditional operator learning approaches. By explicitly modeling the relationship between parameters and system states, the framework enhances both interpretability and robustness.
+A key contribution of this work is the unification of multiple capabilities within a single model. Prediction, extrapolation, adaptation, and discovery are all supported by the same sensitivity-based representation. This reduces model complexity and enables more efficient workflows.
+However, challenges remain. The computational cost of sensitivity estimation may increase with system complexity, and scaling to high-dimensional parameter spaces requires further investigation. Future work will focus on improving scalability and extending the framework to multi-physics systems.
+4. Conclusion
+In this work, we introduced DiffSenNet, a novel operator learning framework designed to model global sensitivity fields for complex dynamical systems. By shifting the learning objective from direct state prediction to sensitivity modeling, the proposed approach enables a deeper understanding of the causal relationships governing system evolution.
+Extensive experiments across multiple physical benchmarks demonstrate that DiffSenNet achieves competitive predictive accuracy while significantly improving robustness under parameter extrapolation. The framework further supports rapid adaptation to unseen systems and enables the identification of key parameters and critical temporal windows that influence system behavior.
+Most importantly, DiffSenNet transforms predictive models into interpretable tools capable of supporting mechanism discovery and control design. This unified capability represents a significant step toward building reliable and explainable scientific machine learning systems.
+Future work will focus on extending the framework to large-scale multi-physics simulations, improving computational efficiency, and exploring real-world applications in engineering and biomedical systems.
+5. Methods
+5.1 Problem Formulation
+We consider a general class of dynamical systems governed by intrinsic parameters. Let the system state be denoted as y(t, x; θ), where t represents time, x denotes spatial coordinates, and θ represents intrinsic system parameters such as physical coefficients, boundary conditions, or material properties.
+Traditional operator learning methods aim to directly approximate mappings from initial conditions and parameters to future states. However, such formulations often fail to capture the structural dependence of system behavior on intrinsic parameters.
+In contrast, DiffSenNet reformulates the learning objective as modeling the global sensitivity field defined as S(t, x; θ) = ∂y(t, x; θ) / ∂θ. This sensitivity field characterizes how variations in parameters influence system states across space and time.
+Once the sensitivity field is obtained, system trajectories under new parameter configurations can be reconstructed through numerical integration over parameter space.
+5.2 Sensitivity Field Learning Architecture
+The core component of DiffSenNet is a neural operator designed to approximate the global sensitivity field across the spatiotemporal domain. The network takes as input historical system states, spatial coordinates, and parameter vectors, and outputs estimated sensitivity values.
+Feature Encoding Module
+The feature encoder extracts multi-scale representations from input fields. Spatial coordinates and historical states are embedded into a high-dimensional latent space using shared linear projections followed by nonlinear activations. This module captures both local spatial structures and long-range dependencies.
+Sensitivity Estimation Module
+This module predicts parameter derivatives at each spatial location using fully connected layers operating on encoded latent features. It ensures smooth spatial sensitivity predictions.
+Integration Module
+Once the sensitivity field is estimated, predicted system states under new parameter configurations are computed through numerical integration. Standard numerical solvers such as Euler or Runge–Kutta (RK4) schemes are used to reconstruct system trajectories.
+5.3 Training Strategy
+The model is trained using supervised learning based on reference simulation data. Training samples consist of input trajectories, parameter values, and ground-truth target states. Mini-batch stochastic gradient descent is used for optimization, typically with the Adam optimizer.
+5.4 Loss Functions
+The total training objective consists of multiple components designed to ensure prediction accuracy and sensitivity consistency.
+State Reconstruction Loss: L_state = || y_pred − y_ref ||²
+Sensitivity Regularization Loss: L_smooth = || ∇Ŝ ||²
+Parameter Consistency Loss: L_param = || Ŝ(θ_i) − Ŝ(θ_j) ||²
+Total Loss: L_total = L_state + λ₁ L_smooth + λ₂ L_param
+5.5 Numerical Integration Scheme
+To reconstruct system trajectories under new parameters, DiffSenNet integrates the predicted sensitivity field along parameter paths. For a given parameter increment Δθ, the update rule is: y_{k+1} = y_k + Ŝ_k · Δθ. Higher-order integration methods such as Runge–Kutta are used to improve numerical stability.
+5.6 Evaluation Metrics
+Relative L2 Error: Relative Error = || y_pred − y_ref ||₂ / || y_ref ||₂
+Normalized Root Mean Square Error (NRMSE): NRMSE = sqrt(mean((y_pred − y_ref)²))
+Extrapolation Stability Metric: This metric measures prediction robustness across out-of-distribution parameter regimes.

@@ -1,0 +1,400 @@
+import torch
+import torch.nn as nn
+import torch.nn.functional as F
+import time
+import numpy as np
+# from torchdiffeq import odeint
+
+device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+
+class Approximation_block(nn.Module):
+    def __init__ (self, in_channels, out_channels, modes, LBO_MATRIX, LBO_INVERSE):
+        
+        super(Approximation_block, self).__init__()
+        
+        self.in_channels = in_channels
+        self.out_channels = out_channels
+        self.modes1 = LBO_MATRIX.shape[1]
+        self.LBO_MATRIX = LBO_MATRIX
+        self.LBO_INVERSE = LBO_INVERSE
+
+        self.scale = (1 / (in_channels*out_channels))
+        self.weights1 = nn.Parameter(self.scale * torch.rand(in_channels, out_channels, self.modes1, dtype=torch.float))
+
+    def forward(self, x):
+                        
+        ################################################################
+        # Encode
+        ################################################################
+        x = x = x.permute(0, 2, 1)
+        x = self.LBO_INVERSE @ x  
+        x = x.permute(0, 2, 1)
+        
+        ################################################################
+        # Approximator
+        ################################################################
+        x = torch.einsum("bix,iox->box", x[:, :], self.weights1)
+        
+        ################################################################
+        # Decode
+        ################################################################
+        x =  x @ self.LBO_MATRIX.T
+        x = torch.clamp(x, -10, 10)
+        return x
+    
+class NORM_Net(nn.Module):
+    def __init__(self, modes, width, LBO_MATRIX, LBO_INVERSE):
+        super(NORM_Net, self).__init__()
+
+        self.modes1 = modes
+        self.width = width
+        self.padding = 2 
+        self.fc0 = nn.Linear(2, self.width) 
+        self.LBO_MATRIX = LBO_MATRIX
+        self.LBO_INVERSE = LBO_INVERSE
+
+        self.conv0 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv1 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv2 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv3 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        
+        self.w0 = nn.Conv1d(self.width, self.width, 1)
+        self.w1 = nn.Conv1d(self.width, self.width, 1)
+        self.w2 = nn.Conv1d(self.width, self.width, 1)
+        self.w3 = nn.Conv1d(self.width, self.width, 1)
+
+        self.fc1 = nn.Linear(self.width, 128)
+        self.fc2 = nn.Linear(128, 1)
+
+    def forward(self, x):
+
+        time_1 = time.perf_counter()
+
+        grid = self.get_grid(x.shape, x.device) # B, N, 1
+        x = torch.cat((x, grid), dim=-1)
+
+        x = self.fc0(x)
+        time_2 = time.perf_counter()
+        # print('self.fc0(x) : %.6f' % (time_2 - time_1))
+        x = x.permute(0, 2, 1)
+
+        x1 = self.conv0(x)
+        time_3 = time.perf_counter()
+        # print('self.conv0(x) : %.6f' % (time_3 - time_2))
+
+        x2 = self.w0(x)
+        time_4 = time.perf_counter()
+        # print('self.w0(x) : %.6f' % (time_4 - time_3))
+
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv1(x)
+        x2 = self.w1(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv2(x)
+        x2 = self.w2(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv3(x)
+        x2 = self.w3(x)
+        x = x1 + x2
+
+        x = x.permute(0, 2, 1)
+        x = self.fc1(x)
+        x = F.gelu(x)
+        x = self.fc2(x)
+        return x
+    
+    def get_grid(self, shape, device):
+        batchsize, size_x = shape[0], shape[1]
+        gridx = torch.tensor(np.linspace(0, 1, size_x), dtype=torch.float)
+        gridx = gridx.reshape(1, size_x, 1).repeat([batchsize, 1, 1])
+        return gridx.to(device)     
+
+class NORM_Net_DeltaPhi(nn.Module):
+    def __init__(self, modes, width, LBO_MATRIX, LBO_INVERSE):
+        super(NORM_Net_DeltaPhi, self).__init__()
+
+        self.modes1 = modes
+        self.width = width
+        self.padding = 2 
+        # self.fc0 = nn.Linear(1 + 2, self.width) 
+        self.fc0 = nn.Linear(2 + 3, self.width) 
+        self.LBO_MATRIX = LBO_MATRIX
+        self.LBO_INVERSE = LBO_INVERSE
+
+        self.conv0 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv1 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv2 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv3 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        
+        self.w0 = nn.Conv1d(self.width, self.width, 1)
+        self.w1 = nn.Conv1d(self.width, self.width, 1)
+        self.w2 = nn.Conv1d(self.width, self.width, 1)
+        self.w3 = nn.Conv1d(self.width, self.width, 1)
+
+        self.fc1 = nn.Linear(self.width, 128)
+        self.fc2 = nn.Linear(128, 1)
+
+    def forward(self, x):
+        x, ref_x, ref_y, ref_score = x['x'], x['ref_x'], x['ref_y'], x['ref_score']
+        ref_score = ref_score.reshape( -1, 1, 1 ) * torch.ones_like( x ) # B, N, 1
+        # x = torch.cat((x, ref_score, ref_x), dim=-1)
+
+        grid = self.get_grid(x.shape, x.device) # B, N, 1
+
+        x = torch.cat((x, ref_score, ref_x, ref_y.reshape(x.shape), grid), dim=-1)
+
+        time_1 = time.perf_counter()
+
+        x = self.fc0(x)
+        time_2 = time.perf_counter()
+        # print('self.fc0(x) : %.6f' % (time_2 - time_1))
+        x = x.permute(0, 2, 1)
+
+        x1 = self.conv0(x)
+        time_3 = time.perf_counter()
+        # print('self.conv0(x) : %.6f' % (time_3 - time_2))
+
+        x2 = self.w0(x)
+        time_4 = time.perf_counter()
+        # print('self.w0(x) : %.6f' % (time_4 - time_3))
+
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv1(x)
+        x2 = self.w1(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv2(x)
+        x2 = self.w2(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv3(x)
+        x2 = self.w3(x)
+        x = x1 + x2
+
+        x = x.permute(0, 2, 1)
+        x = self.fc1(x)
+        x = F.gelu(x)
+        x = self.fc2(x)
+        return x + ref_y.reshape(x.shape)
+    
+    def get_grid(self, shape, device):
+        batchsize, size_x = shape[0], shape[1]
+        gridx = torch.tensor(np.linspace(0, 1, size_x), dtype=torch.float)
+        gridx = gridx.reshape(1, size_x, 1).repeat([batchsize, 1, 1])
+        return gridx.to(device)      
+
+class NORM_Net_DeltaPhi_ODE(nn.Module):
+    def __init__(self, modes, width, LBO_MATRIX, LBO_INVERSE, steps=4):
+        super().__init__()
+        self.modes1 = modes
+        self.width = width
+        self.padding = 2 
+        # self.fc0 = nn.Linear(1 + 2, self.width) 
+        self.fc0 = nn.Linear(2 + 3, self.width) 
+        self.LBO_MATRIX = LBO_MATRIX
+        self.LBO_INVERSE = LBO_INVERSE
+
+        self.conv0 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv1 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv2 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv3 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        
+        self.w0 = nn.Conv1d(self.width, self.width, 1)
+        self.w1 = nn.Conv1d(self.width, self.width, 1)
+        self.w2 = nn.Conv1d(self.width, self.width, 1)
+        self.w3 = nn.Conv1d(self.width, self.width, 1)
+
+        self.fc1 = nn.Linear(self.width, 128)
+        self.fc2 = nn.Linear(128, 1)
+        self.steps = steps
+
+    def func(self,x):
+        x1 = self.conv0(x)
+        time_3 = time.perf_counter()
+        # print('self.conv0(x) : %.6f' % (time_3 - time_2))
+
+        x2 = self.w0(x)
+        time_4 = time.perf_counter()
+        # print('self.w0(x) : %.6f' % (time_4 - time_3))
+
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv1(x)
+        x2 = self.w1(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv2(x)
+        x2 = self.w2(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv3(x)
+        x2 = self.w3(x)
+        dh = x1 + x2
+        return dh
+
+    def forward(self, x):
+        x, ref_x, ref_y, ref_score = x['x'], x['ref_x'], x['ref_y'], x['ref_score']
+        ref_score = ref_score.reshape(-1, 1, 1) * torch.ones_like(x)
+
+        grid = self.get_grid(x.shape, x.device)
+        x = torch.cat((x, ref_score, ref_x, ref_y.reshape(x.shape), grid), dim=-1)
+
+        h0 = self.fc0(x).permute(0, 2, 1)
+
+        h = h0
+        depth_scale=1.0
+
+        for _ in range(self.steps):
+            k1 = self.func(h)
+            k2 = self.func(h + 0.5*depth_scale*k1)
+            k3 = self.func(h + 0.5*depth_scale*k2)
+            k4 = self.func(h + depth_scale*k3)
+            h = h + (depth_scale/6.0)*(k1 + 2*k2 + 2*k3 + k4)
+
+        hT = h
+
+        hT = hT.permute(0, 2, 1)
+        out = F.gelu(self.fc1(hT))
+        out = self.fc2(out)
+        return out + ref_y.reshape(out.shape)
+
+    def get_grid(self, shape, device):
+        batchsize, size_x = shape[0], shape[1]
+        gridx = torch.linspace(0, 1, size_x, dtype=torch.float, device=device)
+        gridx = gridx.reshape(1, size_x, 1).repeat([batchsize, 1, 1])
+        return gridx
+    
+class NORM_Net_DeltaPhi_ODE2(nn.Module):
+    def __init__(self, modes, width, LBO_MATRIX, LBO_INVERSE, steps=5, coord_dim=1):
+        super().__init__()
+        self.modes1 = modes
+        self.width = width
+        self.padding = 2 
+        # self.fc0 = nn.Linear(1 + 2, self.width) 
+        self.fc0 = nn.Linear(3, self.width) 
+        self.LBO_MATRIX = LBO_MATRIX
+        self.LBO_INVERSE = LBO_INVERSE
+
+        self.conv0 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv1 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv2 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        self.conv3 = Approximation_block(self.width, self.width, self.modes1, self.LBO_MATRIX, self.LBO_INVERSE )
+        
+        self.w0 = nn.Conv1d(self.width, self.width, 1)
+        self.w1 = nn.Conv1d(self.width, self.width, 1)
+        self.w2 = nn.Conv1d(self.width, self.width, 1)
+        self.w3 = nn.Conv1d(self.width, self.width, 1)
+
+        self.dhdt_expand = nn.Conv1d(self.width, 2*self.width, 1)
+
+        self.fc1 = nn.Linear(self.width, 128)
+        self.fc2 = nn.Linear(128, 1)
+        self.fc3 = nn.Linear(2, self.width)
+
+        self.coord_proj = nn.Linear(coord_dim, self.width)
+
+        self.ha_conv = nn.Conv1d(2*self.width, self.width, 1)
+        self.steps = steps
+        self.coord_dim = coord_dim
+        self.global_step_scale = nn.Parameter(torch.tensor(0.1))
+        self.global_step_scale.data = torch.tensor(0.1)  
+
+    def func(self, a, h):
+        ha = torch.cat([h, a], dim=1)   # (B, 2*width, N)
+        ha = self.ha_conv(ha)           # (B, width, N)
+        h = F.gelu(ha)
+
+        x1 = self.conv0(h)
+        time_3 = time.perf_counter()
+        # print('self.conv0(x) : %.6f' % (time_3 - time_2))
+
+        x2 = self.w0(h)
+        time_4 = time.perf_counter()
+        # print('self.w0(x) : %.6f' % (time_4 - time_3))
+
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv1(x)
+        x2 = self.w1(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv2(x)
+        x2 = self.w2(x)
+        x = x1 + x2
+        x = F.gelu(x)
+
+        x1 = self.conv3(x)
+        x2 = self.w3(x)
+        dhdt = x1 + x2
+
+        dhdt = self.dhdt_expand(dhdt)  # (B, 2*width, N)
+        dhdt_h, dhdt_a = torch.split(dhdt, self.width, dim=1)
+        dhdt_h = 0.5 * dhdt_h
+        return dhdt_h
+
+    def forward(self, x):
+        x_coord, ref_x, ref_y, ref_score = x['x'], x['ref_x'], x['ref_y'], x['ref_score']
+
+        ref_score = ref_score.reshape(-1, 1, 1) * torch.ones_like(ref_y)   # (B, N, 1)
+        grid = self.get_grid(ref_y.shape, ref_y.device)                    # (B, N, 1)
+        B, N = x['x'].shape[0], x['x'].shape[1]
+        ref_score = x['ref_score'].view(B, 1, 1).repeat(1, N, 1)
+
+        ref_y = x['ref_y']
+        if ref_y.dim() == 2:
+            ref_y = ref_y.unsqueeze(-1)
+
+        grid = self.get_grid((B, N, 1), x['x'].device)
+
+        x_in = torch.cat([ref_score, ref_y, grid], dim=-1)   # (B, N, 3)
+
+        x_feat = self.fc0(x_in)   # (B, N, width)
+
+        a_input = torch.cat([ref_x, x_coord], dim=-1)   # (B, N, 2)
+        a_feat = self.fc3(a_input)                     # (B, N, width)
+
+        depth_coord = (x_coord - ref_x) / float(self.steps)   # (B, N, coord_dim)
+        depth_feat = torch.tanh(self.coord_proj(depth_coord))             # (B, N, width)
+        # depth_scale = depth_feat.permute(0, 2, 1).contiguous()  # (B, width, N)
+        # depth_scale = 0.1 * torch.tanh(depth_feat.permute(0, 2, 1))
+        depth_norm = torch.sigmoid(depth_feat).permute(0,2,1)        
+        depth_scale = self.global_step_scale * depth_norm      
+        depth_scale = depth_scale + 1e-3                        
+
+        h = x_feat.permute(0, 2, 1).contiguous()    # (B, width, N)
+        a = a_feat.permute(0, 2, 1).contiguous()    # (B, width, N)
+
+        for _ in range(self.steps):
+            k1 = self.func(a, h)
+            k2 = self.func(a + 0.5 * depth_scale, h + 0.5 * depth_scale * k1)
+            k3 = self.func(a + 0.5 * depth_scale, h + 0.5 * depth_scale * k2)
+            k4 = self.func(a + depth_scale, h + depth_scale * k3)
+            h = h + (depth_scale / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
+
+        x_out = h.permute(0, 2, 1).contiguous()   # (B, N, width)
+        x_out = F.gelu(self.fc1(x_out))            # (B, N, 128)
+        x_out = self.fc2(x_out)                    # (B, N, 1)
+
+        return x_out + ref_y.reshape(x_out.shape)  # (B, N, 1)
+
+    def get_grid(self, shape, device):
+        batchsize, size_x = shape[0], shape[1]
+        gridx = torch.linspace(0, 1, size_x, dtype=torch.float, device=device)
+        gridx = gridx.reshape(1, size_x, 1).repeat([batchsize, 1, 1])
+        return gridx
+    
